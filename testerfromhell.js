@@ -224,7 +224,7 @@
 
       var overlay = document.createElement('div');
       overlay.setAttribute('id', ID_FORM);
-      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:2147483647;display:flex;align-items:center;justify-content:center;pointer-events:auto;';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:5;display:flex;align-items:center;justify-content:center;pointer-events:auto;';
       overlay.addEventListener('click', function(e) { e.stopPropagation(); });
       overlay.addEventListener('mousedown', function(e) { e.stopPropagation(); });
       overlay.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
