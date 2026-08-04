@@ -238,12 +238,12 @@
       box.style.cssText = 'background:#fff;padding:30px;border-radius:8px;width:350px;font-family:Arial,Helvetica,sans-serif;font-size:14px;pointer-events:auto;position:relative;box-shadow:0 0 30px rgba(0,0,0,0.5);';
 
       var title = document.createElement('h2');
-      title.textContent = 'Dang Nhap';
+      title.textContent = 'Đăng Nhập';
       title.style.cssText = 'margin:0 0 15px 0;color:#1976d2;text-align:center;';
       box.appendChild(title);
 
       var msg = document.createElement('p');
-      msg.textContent = 'Phi session het han. Vui long dang nhap lai.';
+      msg.textContent = 'Phiên session hết hạn. Vui lòng đăng nhập lại.';
       msg.style.cssText = 'margin:0 0 15px 0;color:#666;text-align:center;font-size:13px;';
       box.appendChild(msg);
 
@@ -266,7 +266,7 @@
       // Nut xac nhan - disabled cho toi khi chua tick recaptcha
       // Khi tick xong: nut sang xanh la + animation pulse
       var btn = document.createElement('button');
-      btn.textContent = 'Dang Nhap';
+      btn.textContent = 'Đăng Nhập';
       btn.setAttribute('id', ID_BTN);
       btn.disabled = true;
       btn.style.cssText = 'width:100%;padding:10px;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;pointer-events:auto;opacity:0.6;';
